@@ -34,10 +34,11 @@ class XlsxtoCSV {
             //select first row
             row = rowIterator.next();
 
-
+            outa:
             while (rowIterator.hasNext()) {
                 while (row.getCell(0)== null || !(row.getCell(0).getStringCellValue().equals("Person"))){
-                    row = rowIterator.next();
+                    if (rowIterator.hasNext()) row = rowIterator.next();
+                    else break outa;
                 }
                 //get PersNr from E5
                 String persNr = (int) row.getCell(4).getNumericCellValue() + ",";
@@ -89,19 +90,7 @@ class XlsxtoCSV {
                     data.append(cell == null ? "0:00" : cell.getStringCellValue().trim());
 
                     data.append("\r\n");
-                    System.out.println(row.getRowNum());
                 }
-
-                //skip irrelevant rows
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-
-                System.out.println(row.getRowNum());
             }
 
             fos.write(data.toString());
@@ -114,7 +103,7 @@ class XlsxtoCSV {
 
     public static void main(String[] args) {
         File inputFile = new File("C:\\Users\\Nelta\\Desktop\\Stryker_Zeiterfassung.xlsx");
-        File outputFile = new File("C:\\Users\\Nelta\\Desktop\\output.csv");
+        File outputFile = new File("C:\\Users\\Nelta\\Desktop\\output.txt");
         xlsx(inputFile, outputFile);
     }
 }
