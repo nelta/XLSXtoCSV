@@ -11,6 +11,9 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import javax.swing.*;
 
 class XLSXtoCSV {
+    //some statistics
+    private static int employeesFound = 0;
+    private static int recordsFound = 0;
 
     private static void convertXLSX(File inputFile, File outputFile) {
 
@@ -55,12 +58,10 @@ class XLSXtoCSV {
                 String prename = name.substring(name.indexOf(",") + 2) + ",";
                 String surname = name.substring(0, name.indexOf(",") + 1);
 
-                //skip irrelevant rows
-                // TODO: 21.07.2017 design it dynamically, maybe Hydra-Export is not consistent
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
-                row = rowIterator.next();
+                //skip irrelevant rows, select row with "Datum" in first cell
+                while ( row.getCell(0) == null || !row.getCell(0).getStringCellValue().equals("Datum")) {
+                    row = rowIterator.next();
+                }
 
                 //define the current date, used when multiple records have been made for one day
                 String curDate = "";
@@ -79,7 +80,7 @@ class XLSXtoCSV {
                         if (cell.getStringCellValue().equals("Wochensumme")) continue;
                     }
 
-                    //append final values for this worker (in every record)
+                    //append final values for this employee (in every record)
                     data.append(persNr).append(prename).append(surname);
 
                     //append date, when the first selectable cells index in that row is not 0, use preciously stored
@@ -89,17 +90,17 @@ class XLSXtoCSV {
                         //fit date format to requirements (dd.mm.)
                         curDate = (date < 10 ? "0" + date : "" + date) + ".";
                     }
-                    data.append(curDate);
+                    data.append(curDate).append(",");
 
                     //append "Kommen"
                     cell = row.getCell(8);
                     //when no record have been made for a certain date, append corresponding commas for the empty
                     //entries and a linebreak, skip all other commands in this loop
                     if (cell == null) {
-                        data.append(",,,\r\n");
+                        data.append(",,\r\n");
                         continue;
                     }
-                    //some cell contain a leading whitespace, so trim is needed
+                    //some cells contain a leading whitespace and need to be trimmed
                     data.append(cell.getStringCellValue().trim()).append(",");
 
                     //append "Gehen"
@@ -112,7 +113,12 @@ class XLSXtoCSV {
 
                     //append final linebreak for that record
                     data.append("\r\n");
+
+                    //count total records
+                    recordsFound++;
                 }
+                //count total employees
+                employeesFound++;
             }
 
             //write everything to output file
@@ -133,24 +139,25 @@ class XLSXtoCSV {
 
         //get absolute file path from FileDialog
         String filepath = fd.getDirectory() + fd.getFile();
-
         //get file extension from file
         String fileExtension = fd.getFile().substring(fd.getFile().lastIndexOf(".")+1);
-
-        System.out.println(filepath);
-        System.out.println("Extension: " + fileExtension);
-
         File inputFile = new File(filepath);
-        // TODO: 21.07.2017 rules for naming
-        File outputFile = new File(fd.getDirectory() + "output.csv");
+
+        //get output file name from user
+        String filename = JOptionPane.showInputDialog("Geben Sie bitte den Namen der Ausgabe-Datei an.\n" +
+                "Sonderzeichen werden entfernt.");
+        //erase special characters from filename ( like .,;/\() )
+        filename = filename.replaceAll("[^\\p{L}\\p{Z}]","");
+        File outputFile = new File(fd.getDirectory() + filename + ".csv");
 
         //check file extension for implementation
         if (fileExtension.equals("xlsx")) {
             convertXLSX(inputFile, outputFile);
-            JOptionPane.showMessageDialog(null, "Konvertierung war erfolgreich");
-        }
+            JOptionPane.showMessageDialog(null, "Konvertierung war erfolgreich! \n\n" +
+                    "Mitarbeiter gefunden: " + employeesFound + "\nBuchungen insgesamt: " + recordsFound);
+        }// TODO: 21.07.2017 xls verarbeiten
         else {
-            JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt");
+            JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt.");
         }
         System.exit(0);
     }
