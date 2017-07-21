@@ -1,3 +1,4 @@
+import java.awt.*;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.Iterator;
@@ -6,6 +7,8 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import javax.swing.*;
 
 class XLSXtoCSV {
 
@@ -122,8 +125,33 @@ class XLSXtoCSV {
     }
 
     public static void main(String[] args) {
-        File inputFile = new File("C:\\Users\\Nelta\\Desktop\\Stryker_Zeiterfassung.convertXLSX");
-        File outputFile = new File("C:\\Users\\Nelta\\Desktop\\output.txt");
-        convertXLSX(inputFile, outputFile);
+
+        //file dialog to choose file from system
+        FileDialog fd = new FileDialog((java.awt.Frame) null, "Wählen Sie die Datei aus", FileDialog.LOAD);
+        fd.setDirectory("C:\\");
+        fd.setVisible(true);
+
+        //get absolute file path from FileDialog
+        String filepath = fd.getDirectory() + fd.getFile();
+
+        //get file extension from file
+        String fileExtension = fd.getFile().substring(fd.getFile().lastIndexOf(".")+1);
+
+        System.out.println(filepath);
+        System.out.println("Extension: " + fileExtension);
+
+        File inputFile = new File(filepath);
+        // TODO: 21.07.2017 rules for naming
+        File outputFile = new File(fd.getDirectory() + "output.csv");
+
+        //check file extension for implementation
+        if (fileExtension.equals("xlsx")) {
+            convertXLSX(inputFile, outputFile);
+            JOptionPane.showMessageDialog(null, "Konvertierung war erfolgreich");
+        }
+        else {
+            JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt");
+        }
+        System.exit(0);
     }
 }
