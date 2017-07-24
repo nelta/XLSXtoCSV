@@ -127,6 +127,8 @@ class XLSXtoCSV {
 
         } catch (Exception ioe) {
             ioe.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Ein Fehler ist aufgetreten. \n" +
+                    "Bitten wenden Sie sich an einen Administrator.\n\n Nachricht:\n " + ioe.getMessage());
         }
     }
 
