@@ -3,19 +3,21 @@ import java.io.*;
 import java.nio.charset.Charset;
 import java.util.Iterator;
 
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javax.swing.*;
 
-class XLSXtoCSV {
+class HydraExportToCSV {
     //some statistics
     private static int employeesFound = 0;
     private static int recordsFound = 0;
 
-    private static void convertXLSX(File inputFile, File outputFile) {
+    private static void convert(File inputFile, File outputFile, String fileExtension) {
 
         //charset required by Landwehr
         final Charset ASCII = Charset.forName("ASCII");
@@ -25,11 +27,14 @@ class XLSXtoCSV {
         try {
             Writer fos = new OutputStreamWriter(new FileOutputStream(outputFile), ASCII);
 
-            // Get the workbook object for XLSX file
-            XSSFWorkbook wBook = new XSSFWorkbook(new FileInputStream(inputFile));
+            // Get the workbook object for XLSX or XLS file
+            Workbook wBook;
+            if (fileExtension.equals("xlsx")) wBook = new XSSFWorkbook(new FileInputStream(inputFile));
+            else wBook = new HSSFWorkbook(new FileInputStream(inputFile));
 
             // Get first sheet from the workbook
-            XSSFSheet sheet = wBook.getSheetAt(0);
+            Sheet sheet = wBook.getSheetAt(0);
+
             Row row;
             Cell cell;
 
@@ -153,13 +158,14 @@ class XLSXtoCSV {
         File outputFile = new File(fd.getDirectory() + filename + ".csv");
 
         //check file extension for implementation
-        if (fileExtension.equals("xlsx")) {
-            convertXLSX(inputFile, outputFile);
+        if (fileExtension.equals("xlsx") || fileExtension.equals("xls")) {
+            convert(inputFile, outputFile, fileExtension);
             JOptionPane.showMessageDialog(null, "Konvertierung war erfolgreich! \n\n" +
                     "Mitarbeiter gefunden: " + employeesFound + "\nBuchungen insgesamt: " + recordsFound);
         }// TODO: 21.07.2017 xls verarbeiten
         else {
-            JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt.");
+            JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt.\n" +
+                    "Bitte verwenden Sie nur '.xlsx' oder '.xls'");
         }
         System.exit(0);
     }

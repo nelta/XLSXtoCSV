@@ -2,7 +2,7 @@
   <artifact type="jar" name="untitled:jar">
     <output-path>$PROJECT_DIR$/out/artifacts/untitled_jar</output-path>
     <root id="archive" name="untitled.jar">
-      <element id="module-output" name="untitled" />
+      <element id="module-output" name="ExcelToCSVConverter" />
       <element id="extracted-dir" path="$MAVEN_REPOSITORY$/org/apache/poi/poi-ooxml/3.7/poi-ooxml-3.7.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$MAVEN_REPOSITORY$/org/apache/poi/poi/3.7/poi-3.7.jar" path-in-jar="/" />
       <element id="extracted-dir" path="$MAVEN_REPOSITORY$/org/apache/poi/poi-ooxml-schemas/3.7/poi-ooxml-schemas-3.7.jar" path-in-jar="/" />
