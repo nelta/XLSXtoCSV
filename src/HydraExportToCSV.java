@@ -137,6 +137,10 @@ class HydraExportToCSV {
         }
     }
 
+    public static void convertDefault(File inputFile, File outputFile, String fileExtension){
+
+    }
+
     public static void main(String[] args) {
 
         //file dialog to choose file from system
