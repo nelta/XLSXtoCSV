@@ -249,6 +249,7 @@ class HydraExportToCSV {
                     // sometimes no net value is given at all (bug in hydra system)
                     if (cell != null && row.getCell(25) == null && row.getCell(26) == null) {
                         // TODO: 27.07.2017 post to logfile, maybe notification
+                        // TODO: escape 0 netTime in filewriting and calculations
                         netTimeWorked = 0;
                     } else {
                         netTimeWorked = cell == null ? netTimeWorked : row.getCell(26) == null ?
