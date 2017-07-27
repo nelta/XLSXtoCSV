@@ -10,5 +10,7 @@
     <orderEntry type="library" name="dom4j:dom4j:1.1" level="project" />
     <orderEntry type="library" name="org.apache.xmlbeans:xmlbeans:2.3.0" level="project" />
     <orderEntry type="library" name="org.apache.poi:poi-ooxml:3.7" level="project" />
+    <orderEntry type="library" name="joda-time:joda-time:2.9.9" level="project" />
+    <orderEntry type="library" name="org.projectlombok:lombok:1.16.16" level="project" />
   </component>
 </module>
