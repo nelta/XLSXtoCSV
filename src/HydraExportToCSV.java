@@ -5,6 +5,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.joda.time.DateTime;
+import org.joda.time.Period;
 
 import javax.swing.*;
 import java.awt.*;
@@ -23,19 +24,35 @@ class HydraExportToCSV {
     //charset for logfile
     private final static Charset UTF8 = Charset.forName("UTF8");
 
-    //List of extracted records
-    private static ArrayList<MetaRecord> metaRecords = new ArrayList<>();
+    //List of extracted periodes
+    private static ArrayList<Record> records = new ArrayList<>();
 
     private static void convert(File inputFile, File outputFile, String fileExtension) {
 
-        //extract records
+        //extract periodes
         extractRecords(inputFile, fileExtension);
-        for (MetaRecord m :
-                metaRecords) {
-            System.out.println(m);
-        }
-        //convert records and write to new file
 
+        for (Record r : records) {
+            /*DateTime begin = r.getIntervals().get(0).getBegin();
+            if ( begin.getHourOfDay() == 5)
+                r.getIntervals().get(0).setBegin(begin.plusHours(1).minusMinutes(begin.getMinuteOfHour()));*/
+            Period period = new Period();
+            for (Interval p : r.getIntervals()) {
+                final Period temp = new Period(p.getBegin(), p.getEnd());
+                period = period.getMinutes() + temp.getMinutes() >= 60 ?
+                        period.plusHours(temp.getHours() + 1).plusMinutes(temp.getMinutes() - 60) :
+                        period.plusHours(temp.getHours()).plusMinutes(temp.getMinutes());
+            }
+            period = period.getMinutes() < r.getForcedBreak() ?
+                    period.minusHours(1).plusMinutes(60).minusMinutes(r.getForcedBreak()) :
+                    period.minusMinutes(r.getForcedBreak());
+            double calculatedNetWorkingTime = calculateNetWorkingTime(r);
+            System.out.println(r.getNetTimeWorked() + " : " + calculatedNetWorkingTime +
+                    (r.getNetTimeWorked() != calculatedNetWorkingTime ? " - " + "Fehler: " + r : ""));
+        }
+        //convert periodes and write to new file
+        // TODO: 27.07.2017 post to logfile, maybe notification
+        // TODO: escape 0 netTime in filewriting and calculations
         //create logfile
 
         //Stringbuilder for storing data into CSV files
@@ -84,11 +101,11 @@ class HydraExportToCSV {
                     row = rowIterator.next();
                 }
 
-                //define the current date, used when multiple records have been made for one day
+                //define the current date, used when multiple periodes have been made for one day
                 String curDate = "";
 
                 while (rowIterator.hasNext()) {
-                    //select first row with records
+                    //select first row with periodes
                     row = rowIterator.next();
                     Iterator<Cell> cellIterator = row.cellIterator();
                     //select first cell of current row
@@ -135,7 +152,7 @@ class HydraExportToCSV {
                     //append final linebreak for that record
                     data.append("\r\n");
 
-                    //count total records
+                    //count total periodes
                     recordsFound++;
                 }
                 //count total employees
@@ -186,10 +203,10 @@ class HydraExportToCSV {
                 int month;
                 int year;
                 //get month and year depending on backslash
-                if ( row.getCell(39) != null && row.getCell(39).getCellType() == Cell.CELL_TYPE_STRING) {
+                if (row.getCell(39) != null && row.getCell(39).getCellType() == Cell.CELL_TYPE_STRING) {
                     month = (int) row.getCell(38).getNumericCellValue();
                     year = (int) row.getCell(41).getNumericCellValue();
-                } else if (row.getCell(38) != null && row.getCell(38).getCellType() == Cell.CELL_TYPE_STRING){
+                } else if (row.getCell(38) != null && row.getCell(38).getCellType() == Cell.CELL_TYPE_STRING) {
                     month = (int) row.getCell(37).getNumericCellValue();
                     year = (int) row.getCell(40).getNumericCellValue();
                 } else {
@@ -215,15 +232,15 @@ class HydraExportToCSV {
                 double netTimeWorked = 0.0;
                 int forcedBreak = 0;
 
-                MetaRecord metaRecord = new MetaRecord(0,"","",0,0.0,new ArrayList<>());
+                Record record = new Record(0, "", "", 0, 0.0, new ArrayList<>());
 
-                //iterate through all records of the time tracking system for that employee
+                //iterate through all periodes of the time tracking system for that employee
                 while (rowIterator.hasNext()) {
-                    //select first row with records
+                    //select first row with periodes
                     row = rowIterator.next();
 
                     cell = row.getCell(0);
-                    /*when the first cell in a row contains the word "Monatssumme" that employees records have been
+                    /*when the first cell in a row contains the word "Monatssumme" that employees periodes have been
                     completed and the inner while loop is escaped
                     */
                     if (cell != null && cell.getCellType() == Cell.CELL_TYPE_STRING &&
@@ -248,8 +265,6 @@ class HydraExportToCSV {
                     //extract netTime worked; column number is not consistent, check column for null value
                     // sometimes no net value is given at all (bug in hydra system)
                     if (cell != null && row.getCell(25) == null && row.getCell(26) == null) {
-                        // TODO: 27.07.2017 post to logfile, maybe notification
-                        // TODO: escape 0 netTime in filewriting and calculations
                         netTimeWorked = 0;
                     } else {
                         netTimeWorked = cell == null ? netTimeWorked : row.getCell(26) == null ?
@@ -257,12 +272,20 @@ class HydraExportToCSV {
                                 row.getCell(26).getNumericCellValue();
                     }
 
-                    if ( cell != null ){
-                        metaRecord = new MetaRecord(id, forename, surname, forcedBreak, netTimeWorked, new ArrayList<>());
-                        metaRecords.add(metaRecord);
+                    //create a new record if the first column has a new date (all other possibilities for nonnull values
+                    //in the first column should have been covered and escaped before)
+                    if (cell != null) {
+                        record = new Record(id, forename, surname, forcedBreak, netTimeWorked, new ArrayList<>());
+                        records.add(record);
                     }
-                    metaRecord.getRecords().add(new Record(new DateTime(year+"-"+month+"-"+day+"T"+begin),
-                            new DateTime(year+"-"+month+"-"+day+"T"+end)));
+
+                    DateTime beginDate = new DateTime(year + "-" + month + "-" + day + "T" + begin);
+                    DateTime endDate = new DateTime(year + "-" + month + "-" + day + "T" + end);
+
+                    if (beginDate.getHourOfDay() > endDate.getHourOfDay()) endDate = endDate.plusDays(1);
+
+                    //add new period to the record
+                    record.getIntervals().add(new Interval(beginDate,endDate));
                 }
             }
         } catch (Exception ioe) {
@@ -272,19 +295,44 @@ class HydraExportToCSV {
         }
     }
 
+    public static double calculateNetWorkingTime(Record record){
+        double calculatedNetWorkingTime;
+        Period p = new Period();
+        for ( Interval i : record.getIntervals() ){
+            final Period temp = new Period(i.getBegin(), i.getEnd());
+            p = p.plusHours(temp.getHours()).plusMinutes(temp.getMinutes());
+        }
+        while (p.getMinutes() >= 60) p = p.plusHours(1).minusMinutes(60);
+        p = p.getMinutes()>= record.getForcedBreak() ?
+                p.minusMinutes(record.getForcedBreak()) :
+                p.plusMinutes(60-record.getForcedBreak()).minusHours(1);
+        calculatedNetWorkingTime = p.getHours() + p.getMinutes()/60.0;
+        return Math.round(calculatedNetWorkingTime*100)/100.0;
+    }
+
     public static void main(String[] args) {
 
-        //file dialog to choose file from system
-        FileDialog fd = new FileDialog((java.awt.Frame) null, "Wählen Sie die Datei aus", FileDialog.LOAD);
-        fd.setDirectory("C:\\");
-        fd.setVisible(true);
+        FileDialog fd;
+        String fileExtension;
+        File inputFile;
+        //catch NullPointerException that is thrown when the User aborts or closes the dialog
+        try {
+            //file dialog to choose file from system
+            fd = new FileDialog((Frame) null, "Wählen Sie die Datei aus", FileDialog.LOAD);
+            fd.setDirectory("C:\\");
+            fd.setVisible(true);
 
-        //get absolute file path from FileDialog
-        String filepath = fd.getDirectory() + fd.getFile();
-        //get file extension from file
-        String fileExtension = fd.getFile().substring(fd.getFile().lastIndexOf(".") + 1);
-        File inputFile = new File(filepath);
+            //get absolute file path from FileDialog
+            String filepath = fd.getDirectory() + fd.getFile();
+            //get file extension from file
+            fileExtension = fd.getFile().substring(fd.getFile().lastIndexOf(".") + 1);
+            inputFile = new File(filepath);
 
+        } catch (NullPointerException ne) {
+            System.out.println("---Programmabbruch---");
+            System.exit(0);
+            return;
+        }
         //get output file name from user
         String filename = JOptionPane.showInputDialog("Geben Sie bitte den Namen der Ausgabe-Datei an.\n" +
                 "Sonderzeichen werden entfernt.");
