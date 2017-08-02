@@ -18,6 +18,8 @@ class HydraExportToCSV {
     //some statistics
     private static int employeesFound = 0;
     private static int recordsFound = 0;
+    private static String filename;
+    private static FileDialog fd;
 
     //charset required by Landwehr
     private final static Charset ASCII = Charset.forName("ASCII");
@@ -26,34 +28,20 @@ class HydraExportToCSV {
 
     //List of extracted periodes
     private static ArrayList<Record> records = new ArrayList<>();
+    private static ArrayList<Record> recordsToBeReviewed = new ArrayList<>();
 
     private static void convert(File inputFile, File outputFile, String fileExtension) {
 
         //extract periodes
         extractRecords(inputFile, fileExtension);
 
-        for (Record r : records) {
-            /*DateTime begin = r.getIntervals().get(0).getBegin();
-            if ( begin.getHourOfDay() == 5)
-                r.getIntervals().get(0).setBegin(begin.plusHours(1).minusMinutes(begin.getMinuteOfHour()));*/
-            Period period = new Period();
-            for (Interval p : r.getIntervals()) {
-                final Period temp = new Period(p.getBegin(), p.getEnd());
-                period = period.getMinutes() + temp.getMinutes() >= 60 ?
-                        period.plusHours(temp.getHours() + 1).plusMinutes(temp.getMinutes() - 60) :
-                        period.plusHours(temp.getHours()).plusMinutes(temp.getMinutes());
-            }
-            period = period.getMinutes() < r.getForcedBreak() ?
-                    period.minusHours(1).plusMinutes(60).minusMinutes(r.getForcedBreak()) :
-                    period.minusMinutes(r.getForcedBreak());
-            double calculatedNetWorkingTime = calculateNetWorkingTime(r);
-            System.out.println(r.getNetTimeWorked() + " : " + calculatedNetWorkingTime +
-                    (r.getNetTimeWorked() != calculatedNetWorkingTime ? " - " + "Fehler: " + r : ""));
-        }
-        //convert periodes and write to new file
+        //handle exceptions, create logfile
+        handleExceptions();
+        createLogfile();
+
+        //convert periods and write to new file
         // TODO: 27.07.2017 post to logfile, maybe notification
         // TODO: escape 0 netTime in filewriting and calculations
-        //create logfile
 
         //Stringbuilder for storing data into CSV files
         StringBuilder data = new StringBuilder();
@@ -167,6 +155,79 @@ class HydraExportToCSV {
             ioe.printStackTrace();
             JOptionPane.showMessageDialog(null, "Ein Fehler ist aufgetreten. \n" +
                     "Bitten wenden Sie sich an einen Administrator.\n\n Nachricht:\n " + ioe.getMessage());
+        }
+    }
+
+    private static void createLogfile() {
+        StringBuilder data = new StringBuilder();
+        File logFile = new File(fd.getDirectory() + "LOG-" + filename + ".txt");
+        try {
+            Writer fos = new OutputStreamWriter(new FileOutputStream(logFile), UTF8);
+
+            if (recordsToBeReviewed.size() == 0) {
+                data.append("Es wurden keine Inkonsistenzen gefunden.");
+                fos.write(data.toString());
+                fos.close();
+                return;
+            }
+
+            data.append("Folgende ")
+                    .append(recordsToBeReviewed.size())
+                    .append(" Inkonsistenzen, die eine manuelle Prüfung erfordern, wurden gefunden: \r\n\r\n");
+
+            int count = 1;
+            for (Record r : recordsToBeReviewed) {
+                data.append(count).append("\t");
+                count++;
+                double calculatedNetWorkingTime = calculateNetWorkingTime(r);
+                double dif = calculatedNetWorkingTime - r.getNetTimeWorked();
+                data.append("Differenz in Minuten / als Zahl: ")
+                        .append(Math.round((calculatedNetWorkingTime - r.getNetTimeWorked()) * 60))
+                        .append("min / ")
+                        .append(dif)
+                        .append("\r\n");
+                data.append("Bei Eintrag: ")
+                        .append(r)
+                        .append("\r\n\r\n");
+            }
+
+            //write everything to logfile
+            fos.write(data.toString());
+            fos.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Ein Fehler ist aufgetreten. \n" +
+                    "Bitten wenden Sie sich an einen Administrator.\n\n Nachricht:\n " + e.getMessage());
+        }
+    }
+
+    private static void handleExceptions() {
+        for (Record r : records) {
+
+            //if the employee doesn't have the permission to start before his shift begins, those minutes doesn't count
+            double calculatedNetWorkingTime = calculateNetWorkingTime(r);
+            int minutesBelowCalculations = (int) Math.round((calculatedNetWorkingTime - r.getNetTimeWorked()) * 60);
+            if (r.getNetTimeWorked() < calculatedNetWorkingTime) {
+                DateTime beginRecord = r.getIntervals().get(0).getBegin();
+                if (minutesBelowCalculations + beginRecord.getMinuteOfHour() == 60) {
+                    beginRecord = beginRecord.plusHours(1).minusMinutes(beginRecord.getMinuteOfHour());
+                    r.getIntervals().get(0).setBegin(beginRecord);
+                }
+            }
+
+            //handle if the given break is ignored by time calculations
+            if (minutesBelowCalculations * (-1) == r.getForcedBreak()) {
+                r.setForcedBreak(0);
+            }
+
+            //recalculate net working time
+            calculatedNetWorkingTime = calculateNetWorkingTime(r);
+
+            if (calculatedNetWorkingTime != r.getNetTimeWorked()) {
+                recordsToBeReviewed.add(r);
+                System.out.println(r.getNetTimeWorked() + " : " + calculatedNetWorkingTime + " - Minuten: " +
+                        minutesBelowCalculations + " Record: " + r);
+            }
         }
     }
 
@@ -285,7 +346,7 @@ class HydraExportToCSV {
                     if (beginDate.getHourOfDay() > endDate.getHourOfDay()) endDate = endDate.plusDays(1);
 
                     //add new period to the record
-                    record.getIntervals().add(new Interval(beginDate,endDate));
+                    record.getIntervals().add(new Interval(beginDate, endDate));
                 }
             }
         } catch (Exception ioe) {
@@ -295,24 +356,23 @@ class HydraExportToCSV {
         }
     }
 
-    public static double calculateNetWorkingTime(Record record){
+    private static double calculateNetWorkingTime(Record record) {
         double calculatedNetWorkingTime;
         Period p = new Period();
-        for ( Interval i : record.getIntervals() ){
+        for (Interval i : record.getIntervals()) {
             final Period temp = new Period(i.getBegin(), i.getEnd());
             p = p.plusHours(temp.getHours()).plusMinutes(temp.getMinutes());
         }
         while (p.getMinutes() >= 60) p = p.plusHours(1).minusMinutes(60);
-        p = p.getMinutes()>= record.getForcedBreak() ?
+        p = p.getMinutes() >= record.getForcedBreak() ?
                 p.minusMinutes(record.getForcedBreak()) :
-                p.plusMinutes(60-record.getForcedBreak()).minusHours(1);
-        calculatedNetWorkingTime = p.getHours() + p.getMinutes()/60.0;
-        return Math.round(calculatedNetWorkingTime*100)/100.0;
+                p.plusMinutes(60 - record.getForcedBreak()).minusHours(1);
+        calculatedNetWorkingTime = p.getHours() + p.getMinutes() / 60.0;
+        return Math.round(calculatedNetWorkingTime * 100) / 100.0;
     }
 
     public static void main(String[] args) {
 
-        FileDialog fd;
         String fileExtension;
         File inputFile;
         //catch NullPointerException that is thrown when the User aborts or closes the dialog
@@ -334,7 +394,7 @@ class HydraExportToCSV {
             return;
         }
         //get output file name from user
-        String filename = JOptionPane.showInputDialog("Geben Sie bitte den Namen der Ausgabe-Datei an.\n" +
+        filename = JOptionPane.showInputDialog("Geben Sie bitte den Namen der Ausgabe-Datei an.\n" +
                 "Sonderzeichen werden entfernt.");
         //erase special characters from filename ( like .,;/\() )
         filename = filename.replaceAll("[^\\p{L}\\p{Z}]", "");
