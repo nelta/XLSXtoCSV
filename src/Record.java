@@ -1,7 +1,7 @@
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
-import java.util.List;
+import java.util.ArrayList;
 
 /**
  * This class inherits all necessary attributes to reconstruct the corresponding time tracking system and
@@ -16,5 +16,5 @@ class Record {
     private String surname;
     private int forcedBreak;
     private double netTimeWorked;
-    private List<Interval> intervals;
+    private ArrayList<Interval> intervals;
 }

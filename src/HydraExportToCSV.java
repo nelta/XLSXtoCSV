@@ -6,13 +6,17 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.joda.time.DateTime;
 import org.joda.time.Period;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 class HydraExportToCSV {
     //some statistics
@@ -28,7 +32,7 @@ class HydraExportToCSV {
 
     //List of extracted periodes
     private static ArrayList<Record> records = new ArrayList<>();
-    private static ArrayList<Record> recordsToBeReviewed = new ArrayList<>();
+    private static Set<Record> recordsToBeReviewed = new HashSet<>();
 
     private static void convert(File inputFile, File outputFile, String fileExtension) {
 
@@ -36,115 +40,40 @@ class HydraExportToCSV {
         extractRecords(inputFile, fileExtension);
 
         //handle exceptions, create logfile
-        handleExceptions();
+        modifyRecords();
         createLogfile();
 
         //convert periods and write to new file
-        // TODO: 27.07.2017 post to logfile, maybe notification
-        // TODO: escape 0 netTime in filewriting and calculations
+        createOutput(outputFile);
+
+
+    }
+
+    private static void createOutput(File outputFile) {
+        final String KOMMEN = "K";
+        final String GEHEN = "G";
+        final DateTimeFormatter format = DateTimeFormat.forPattern("dd.MM.yyyy HH:mm:ss");
 
         //Stringbuilder for storing data into CSV files
         StringBuilder data = new StringBuilder();
         try {
             Writer fos = new OutputStreamWriter(new FileOutputStream(outputFile), ASCII);
 
-            // Get the workbook object for XLSX or XLS file
-            Workbook wBook;
-            if (fileExtension.equals("xlsx")) wBook = new XSSFWorkbook(new FileInputStream(inputFile));
-            else wBook = new HSSFWorkbook(new FileInputStream(inputFile));
-
-            // Get first sheet from the workbook
-            Sheet sheet = wBook.getSheetAt(0);
-
-            Row row;
-            Cell cell;
-
-            //Iterator to iterate through each row from sheet
-            Iterator<Row> rowIterator = sheet.iterator();
-            //append predefined header
-            data.append("PersNr,Vorname,Nachname,Datum,Kommen,Gehen,Pause\r\n");
-
-            //select first row
-            row = rowIterator.next();
-
-            outerLoop:
-            while (rowIterator.hasNext()) {
-                //skip rows until the first cell contains the word "Person"
-                while (row.getCell(0) == null || !(row.getCell(0).getStringCellValue().equals("Person"))) {
-                    //stop when no rows left
-                    if (rowIterator.hasNext()) row = rowIterator.next();
-                    else break outerLoop;
+            for (Record r : records) {
+                for (Interval i : r.getIntervals()) {
+                    data.append(KOMMEN)
+                            .append(";")
+                            .append(r.getId())
+                            .append(";")
+                            .append(format.print(i.getBegin()))
+                            .append(";;;;;\r\n");
+                    data.append(GEHEN)
+                            .append(";")
+                            .append(r.getId())
+                            .append(";")
+                            .append(format.print(i.getEnd()))
+                            .append(";;;;;\r\n");
                 }
-                //get PersNr from E5
-                String persNr = (int) row.getCell(4).getNumericCellValue() + ",";
-                row = rowIterator.next();
-                //get full name from F6
-                String name = row.getCell(5).getStringCellValue();
-                //split full name
-                String prename = name.substring(name.indexOf(",") + 2) + ",";
-                String surname = name.substring(0, name.indexOf(",") + 1);
-
-                //skip irrelevant rows, select row with "Datum" in first cell
-                while (row.getCell(0) == null || !row.getCell(0).getStringCellValue().equals("Datum")) {
-                    row = rowIterator.next();
-                }
-
-                //define the current date, used when multiple periodes have been made for one day
-                String curDate = "";
-
-                while (rowIterator.hasNext()) {
-                    //select first row with periodes
-                    row = rowIterator.next();
-                    Iterator<Cell> cellIterator = row.cellIterator();
-                    //select first cell of current row
-                    cell = cellIterator.next();
-                    //when the first cell in a row contains the word "Monatssumme" that employees record have been
-                    //completed and the inner while loop is escaped
-                    //when the first cell in a row contains the word "Wochensumme" that row can be skipped
-                    if (cell.getCellType() == Cell.CELL_TYPE_STRING) {
-                        if (cell.getStringCellValue().equals("Monatssumme")) break;
-                        if (cell.getStringCellValue().equals("Wochensumme")) continue;
-                    }
-
-                    //append final values for this employee (in every record)
-                    data.append(persNr).append(prename).append(surname);
-
-                    //append date, when the first selectable cell's index in that row is not 0, use preciously stored
-                    //current date, else read the cell
-                    if (cell.getColumnIndex() == 0) {
-                        double date = cell.getNumericCellValue();
-                        //fit date format to requirements (dd.mm.)
-                        curDate = (date < 10 ? "0" + date : "" + date) + ".";
-                    }
-                    data.append(curDate).append(",");
-
-                    //append "Kommen"
-                    cell = row.getCell(8);
-                    //when no record have been made for a certain date, append corresponding commas for the empty
-                    //entries and a linebreak, skip all other commands in this loop
-                    if (cell == null) {
-                        data.append(",,\r\n");
-                        continue;
-                    }
-                    //some cells contain a leading whitespace and need to be trimmed
-                    data.append(cell.getStringCellValue().trim()).append(",");
-
-                    //append "Gehen"
-                    cell = row.getCell(10);
-                    data.append(cell.getStringCellValue().trim()).append(",");
-
-                    //append "Pause", multiple entries on one day do have one entry for "Pause", add "0:00" instead
-                    cell = row.getCell(12);
-                    data.append(cell == null ? "0:00" : cell.getStringCellValue().trim());
-
-                    //append final linebreak for that record
-                    data.append("\r\n");
-
-                    //count total periodes
-                    recordsFound++;
-                }
-                //count total employees
-                employeesFound++;
             }
 
             //write everything to output file
@@ -184,11 +113,26 @@ class HydraExportToCSV {
                 data.append("Differenz in Minuten / als Zahl: ")
                         .append(Math.round((calculatedNetWorkingTime - r.getNetTimeWorked()) * 60))
                         .append("min / ")
-                        .append(dif)
+                        .append(Math.round(dif * 100) / 100.0)
                         .append("\r\n");
                 data.append("Bei Eintrag: ")
-                        .append(r)
-                        .append("\r\n\r\n");
+                        .append(r.getId())
+                        .append("\t")
+                        .append(r.getForename())
+                        .append("\t")
+                        .append(r.getSurname())
+                        .append("\t")
+                        .append(r.getIntervals())
+                        .append("\r\n");
+                if (r.getNetTimeWorked() == 0) {
+                    data.append("Problem: KEINE IST-ZEIT IN TABELLE EINGETRAGEN!")
+                            .append("\r\n");
+                }
+                if (r.getForcedBreak() > 0){
+                    data.append("Problem: PAUSE KONNTE NICHT EINGETRAGEN WERDEN!")
+                            .append("\r\n");
+                }
+                data.append("\r\n");
             }
 
             //write everything to logfile
@@ -201,17 +145,46 @@ class HydraExportToCSV {
         }
     }
 
-    private static void handleExceptions() {
+    private static void modifyRecords() {
+        final int MINUTES_OF_DAY = 1440;
         for (Record r : records) {
+            ArrayList<Interval> intervals = r.getIntervals();
+
+            /*
+            Adjusting night shift:
+            its a night shift, when the ending is before the beginning (dates have not been fixed yet)
+            and if the interval before the change of days is less than afterwards
+            if it is a night shift all DateTimes before the change of days have to be reduced by 1 due to an "error"
+            at Stryker's time tracking system: if an employees starts at 22:34, 01.08. and is working till 6:34, 02.08.
+            all entries are stored under the 2md of August
+            therefor for all record that include a day change but are no night shifts, all DateTimes after that day
+            change have to be increased by one day
+             */
+            final DateTime begin = intervals.get(0).getBegin();
+            final DateTime end = intervals.get(intervals.size() - 1).getEnd();
+            if (begin.compareTo(end) > 0) {
+                if ((MINUTES_OF_DAY - begin.getMinuteOfDay()) < end.getMinuteOfDay()) {
+                    for (Interval i : intervals) {
+                        i.setBegin(i.getBegin().compareTo(begin) >= 0 ? i.getBegin().minusDays(1) : i.getBegin());
+                        i.setEnd(i.getEnd().compareTo(begin) > 0 ? i.getEnd().minusDays(1) : i.getEnd());
+                    }
+                } else {
+                    for (Interval i : intervals) {
+                        i.setBegin(i.getBegin().compareTo(end) < 0 ? i.getBegin().plusDays(1) : i.getBegin());
+                        i.setEnd(i.getEnd().compareTo(end) <= 0 ? i.getEnd().plusDays(1) : i.getEnd());
+                    }
+                }
+            }
 
             //if the employee doesn't have the permission to start before his shift begins, those minutes doesn't count
             double calculatedNetWorkingTime = calculateNetWorkingTime(r);
             int minutesBelowCalculations = (int) Math.round((calculatedNetWorkingTime - r.getNetTimeWorked()) * 60);
+
             if (r.getNetTimeWorked() < calculatedNetWorkingTime) {
-                DateTime beginRecord = r.getIntervals().get(0).getBegin();
+                DateTime beginRecord = intervals.get(0).getBegin();
                 if (minutesBelowCalculations + beginRecord.getMinuteOfHour() == 60) {
                     beginRecord = beginRecord.plusHours(1).minusMinutes(beginRecord.getMinuteOfHour());
-                    r.getIntervals().get(0).setBegin(beginRecord);
+                    intervals.get(0).setBegin(beginRecord);
                 }
             }
 
@@ -225,8 +198,23 @@ class HydraExportToCSV {
 
             if (calculatedNetWorkingTime != r.getNetTimeWorked()) {
                 recordsToBeReviewed.add(r);
-                System.out.println(r.getNetTimeWorked() + " : " + calculatedNetWorkingTime + " - Minuten: " +
-                        minutesBelowCalculations + " Record: " + r);
+            }
+
+            if (r.getForcedBreak() > 0) {
+                boolean breakEntered = false;
+                for (Interval interval : intervals) {
+                    Period period = new Period(interval.getBegin(), interval.getEnd());
+                    if (period.getHours() * 60 + period.getMinutes() > r.getForcedBreak()) {
+                        interval.setEnd(interval.getEnd().minusMinutes(r.getForcedBreak()));
+                        r.setForcedBreak(0);
+                        breakEntered = true;
+                        break;
+                    }
+                }
+                if (!breakEntered) {
+                    recordsToBeReviewed.add(r);
+                    System.out.println("Pause konnte nicht eingetragen werden.");
+                }
             }
         }
     }
@@ -338,16 +326,16 @@ class HydraExportToCSV {
                     if (cell != null) {
                         record = new Record(id, forename, surname, forcedBreak, netTimeWorked, new ArrayList<>());
                         records.add(record);
+                        recordsFound++;
                     }
 
                     DateTime beginDate = new DateTime(year + "-" + month + "-" + day + "T" + begin);
                     DateTime endDate = new DateTime(year + "-" + month + "-" + day + "T" + end);
 
-                    if (beginDate.getHourOfDay() > endDate.getHourOfDay()) endDate = endDate.plusDays(1);
-
                     //add new period to the record
                     record.getIntervals().add(new Interval(beginDate, endDate));
                 }
+                employeesFound++;
             }
         } catch (Exception ioe) {
             ioe.printStackTrace();
@@ -404,7 +392,9 @@ class HydraExportToCSV {
         if (fileExtension.equals("xlsx") || fileExtension.equals("xls")) {
             convert(inputFile, outputFile, fileExtension);
             JOptionPane.showMessageDialog(null, "Konvertierung war erfolgreich! \n\n" +
-                    "Mitarbeiter gefunden: " + employeesFound + "\nBuchungen insgesamt: " + recordsFound);
+                    "Mitarbeiter gefunden: " + employeesFound + "\nEinträge insgesamt: " + recordsFound + "\n\n" +
+                    "Es gibt " + recordsToBeReviewed.size() + " Einträge, die manuell angepasst werden müssen.\n" +
+                    "Nähere Informationen im Bericht");
         } else {
             JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt.\n" +
                     "Bitte verwenden Sie nur '.xlsx' oder '.xls'");
