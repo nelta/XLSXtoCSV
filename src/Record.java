@@ -1,5 +1,6 @@
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.util.ArrayList;
 
@@ -10,11 +11,18 @@ import java.util.ArrayList;
  */
 @Data
 @AllArgsConstructor
-class Record {
+class Record implements Comparable<Record>{
     private int id; // == Transpondernummer
     private String forename;
     private String surname;
     private int forcedBreak;
     private double netTimeWorked;
     private ArrayList<Interval> intervals;
+
+
+    @Override
+    public int compareTo(Record o) {
+        int cmpId = o.id;
+        return Integer.compare(this.id, cmpId);
+    }
 }
