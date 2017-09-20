@@ -335,14 +335,18 @@ class HydraExportToCSV {
                         .append("min / als Zahl: ")
                         .append(Math.round(dif * 100) / 100.0)
                         .append("\r\n");
+
+                //append known issues
                 if (r.getNetTimeWorked() == 0) {
                     data.append("\tProblem: KEINE IST-ZEIT IN TABELLE EINGETRAGEN!")
                             .append("\r\n");
                 }
+
                 if (r.getForcedBreak() > 0){
                     data.append("\tProblem: PAUSE KONNTE NICHT EINGETRAGEN WERDEN!")
                             .append("\r\n");
                 }
+
                 data.append("\r\n");
             }
 
