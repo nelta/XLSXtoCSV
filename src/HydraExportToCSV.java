@@ -169,30 +169,41 @@ class HydraExportToCSV {
                     //rows containing F in column 15 can be ignored
                     if (row.getCell(14) != null && row.getCell(14).getStringCellValue().equals("F")) continue;
 
+                    //extract netTime worked; column number is not consistent, check column for null value
+                    // sometimes no net value is given at all (bug in hydra system)
+                    if (cell != null && ((row.getCell(25) == null && row.getCell(26) == null) ||
+                            (row.getCell(25).getCellType() == 3 && row.getCell(26).getCellType() == 3))
+                            ) {
+                        netTimeWorked = 0;
+                    } else {
+                        netTimeWorked = cell == null || cell.getNumericCellValue() == 0 ? netTimeWorked :
+                                row.getCell(26) == null || row.getCell(25).getCellType() == 0 ?
+                                        row.getCell(25).getNumericCellValue() :
+                                        row.getCell(26).getNumericCellValue();
+                    }
+
                     /*overwrite current day if necessary
                      Excel contains a format like (D)D,MM for the date, cast to int to cut of the month
                      */
                     day = cell == null || cell.getNumericCellValue() == 0 ? day : (int) cell.getNumericCellValue();
 
-                    //extract begin, end and pause; some values contain leading whitespace must be transformed to
+                    //extract begin, end and pause; some values contain leading a whitespace which must be transformed to
                     // leading zero
-                    String begin = row.getCell(8).getStringCellValue().replace(" ", "0").concat(":00");
-                    String end = row.getCell(10).getStringCellValue().replace(" ", "0").concat(":00");
                     forcedBreak = row.getCell(12) == null || row.getCell(12).getStringCellValue().equals("") ?
                             forcedBreak : Integer.parseInt(row.getCell(12).getStringCellValue().substring(3));
-
-                    //extract netTime worked; column number is not consistent, check column for null value
-                    // sometimes no net value is given at all (bug in hydra system)
-                    if (cell != null && ( (row.getCell(25) == null && row.getCell(26) == null) ||
-                            (row.getCell(25).getCellType() == 3 && row.getCell(26).getCellType() == 3))
-                            ) {
-                        netTimeWorked = 0;
-                    } else {
-                        netTimeWorked = cell == null || cell.getNumericCellValue()==0 ? netTimeWorked :
-                                row.getCell(26) == null || row.getCell(25).getCellType()==0 ?
-                                        row.getCell(25).getNumericCellValue() :
-                                        row.getCell(26).getNumericCellValue();
+                    String begin = row.getCell(8).getStringCellValue().replace(" ", "0").concat(":00");
+                    //if there is no end entered to the sheet but a beginning, this mus be escaped and put to logfile
+                    //employees who did do several breaks on that day will appear twice in the logfile that day
+                    //first for not having a time entered in that column and second because the records calculated
+                    // parameters don't pass the test
+                    if ( row.getCell(10) == null || row.getCell(10).getStringCellValue().equals("")){
+                        ArrayList<Interval> errorIntervals = new ArrayList<>();
+                        errorIntervals.add(new Interval(new DateTime(year + "-" + month + "-" + day + "T" + begin), null));
+                        recordsToBeReviewed.add(new Record(id, forename, surname, 0, netTimeWorked, errorIntervals));
+                        continue;
                     }
+                    String end = row.getCell(10).getStringCellValue().replace(" ", "0").concat(":00");
+
 
                     //create a new record if the first column has a new date (all other possibilities for nonnull values
                     //in the first column should have been covered and escaped before)
@@ -202,7 +213,7 @@ class HydraExportToCSV {
                         recordsFound++;
                     }
 
-                    //System.out.println(year + "-" + month + "-" + day + "T" + begin);
+                    //create dates for the interval
                     DateTime beginDate = new DateTime(year + "-" + month + "-" + day + "T" + begin);
                     DateTime endDate = new DateTime(year + "-" + month + "-" + day + "T" + end);
 
@@ -342,8 +353,13 @@ class HydraExportToCSV {
                             .append("\r\n");
                 }
 
-                if (r.getForcedBreak() > 0){
+                if (r.getForcedBreak() > 0) {
                     data.append("\tProblem: PAUSE KONNTE NICHT EINGETRAGEN WERDEN!")
+                            .append("\r\n");
+                }
+
+                if (r.getIntervals().get(0).getEnd() == null){
+                    data.append("\tProblem: ES WURDE KEINE \"GEHEN\"-ZEIT EINGETRAGEN!")
                             .append("\r\n");
                 }
 
