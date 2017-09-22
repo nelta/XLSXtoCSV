@@ -71,7 +71,7 @@ class HydraExportToCSV {
         } else {
             JOptionPane.showMessageDialog(null, "Dateiformat wird derzeit nicht unterstützt.\n" +
                     "Bitte verwenden Sie nur '.xlsx' oder '.xls'");
-        }
+    }
         System.exit(0);
     }
 
